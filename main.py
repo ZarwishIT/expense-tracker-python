@@ -5,21 +5,28 @@ import sqlite3
 
 selected_expense_id = None
 
-# Database Functions
+# Database Functions (Database setup + Get + Delete added)
 def init_db():
     conn = sqlite3.connect("expenses.db")
-    conn.execute('''CREATE TABLE IF NOT EXISTS expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        amount REAL NOT NULL,
-        category TEXT NOT NULL,
-        date TEXT NOT NULL)''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, amount REAL NOT NULL, category TEXT NOT NULL, date TEXT NOT NULL)''')
     conn.commit()
     conn.close()
 
 def save_expense(title, amount, category, exp_date):
     conn = sqlite3.connect("expenses.db")
     conn.execute("INSERT INTO expenses (title,amount,category,date) VALUES (?,?,?,?)", (title, amount, category, exp_date))
+    conn.commit()
+    conn.close()
+
+def get_expenses():
+    conn = sqlite3.connect("expenses.db")
+    rows = conn.execute("SELECT * FROM expenses ORDER BY date DESC").fetchall()
+    conn.close()
+    return rows
+
+def delete_expense(eid):
+    conn = sqlite3.connect("expenses.db")
+    conn.execute("DELETE FROM expenses WHERE id=?", (eid,))
     conn.commit()
     conn.close()
 
@@ -63,22 +70,50 @@ def handle_save():
     amount = entry_amount.get().strip()
     category = cat_var.get()
     exp_date = entry_date.get().strip()
-    
-    if not title or not amount:
-        messagebox.showwarning("Error", "Please fill Title and Amount!")
-        return
-    try:
-        float(amount)
-    except ValueError:
-        messagebox.showwarning("Error", "Amount must be a number!")
-        return
-        
+    if not title or not amount: return
     save_expense(title, float(amount), category, exp_date)
     entry_title.delete(0, tk.END)
     entry_amount.delete(0, tk.END)
-    messagebox.showinfo("Success", "Expense Saved Locally!")
+    load_table()
 
 btn_save = tk.Button(form, text="💾 Save Expense", font=("Arial", 11, "bold"), bg="#27ae60", fg="white", padx=20, pady=5, command=handle_save)
 btn_save.grid(row=4, column=1, pady=10)
 
+# Table Section
+tbl = tk.LabelFrame(root, text=" 📋 All Expenses ", font=("Arial", 11, "bold"), bg="#f5f6fa", fg="#2c3e50")
+tbl.pack(padx=25, pady=5, fill="both", expand=True)
+
+cols = ("ID", "Title", "Amount (Rs)", "Category", "Date")
+tree = ttk.Treeview(tbl, columns=cols, show="headings", height=7)
+
+for col, w in zip(cols, [40, 200, 120, 130, 120]):
+    tree.heading(col, text=col)
+    tree.column(col, width=w, anchor="center")
+
+sb = ttk.Scrollbar(tbl, orient="vertical", command=tree.yview)
+tree.configure(yscroll=sb.set)
+sb.pack(side="right", fill="y")
+tree.pack(fill="both", expand=True)
+
+def handle_delete():
+    selected = tree.selection()
+    if not selected:
+        messagebox.showwarning("Warning", "Please select a row first!")
+        return
+    eid = tree.item(selected[0])["values"][0]
+    if messagebox.askyesno("Confirm", "Are you sure you want to delete?"):
+        delete_expense(eid)
+        load_table()
+
+# Action Buttons
+btn_frame = tk.Frame(root, bg="#f5f6fa")
+btn_frame.pack(pady=10)
+
+tk.Button(btn_frame, text="🗑️ Delete Selected", font=("Arial", 10, "bold"), bg="#e74c3c", fg="white", padx=18, pady=6, command=handle_delete).pack(side="left", padx=10)
+
+def load_table():
+    for row in tree.get_children(): tree.delete(row)
+    for exp in get_expenses(): tree.insert("", tk.END, values=exp)
+
+load_table()
 root.mainloop()
