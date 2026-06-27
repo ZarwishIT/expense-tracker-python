@@ -5,7 +5,7 @@ import sqlite3
 
 selected_expense_id = None
 
-# Database Functions (Database setup + Get + Delete added)
+# Database Functions (Update DB Query Added)
 def init_db():
     conn = sqlite3.connect("expenses.db")
     conn.execute('''CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, amount REAL NOT NULL, category TEXT NOT NULL, date TEXT NOT NULL)''')
@@ -23,6 +23,12 @@ def get_expenses():
     rows = conn.execute("SELECT * FROM expenses ORDER BY date DESC").fetchall()
     conn.close()
     return rows
+
+def update_expense_db(eid, title, amount, category, exp_date):
+    conn = sqlite3.connect("expenses.db")
+    conn.execute("UPDATE expenses SET title=?, amount=?, category=?, date=? WHERE id=?", (title, amount, category, exp_date, eid))
+    conn.commit()
+    conn.close()
 
 def delete_expense(eid):
     conn = sqlite3.connect("expenses.db")
@@ -66,12 +72,21 @@ entry_date.insert(0, str(date.today()))
 entry_date.grid(row=3, column=1, padx=15, pady=5)
 
 def handle_save():
+    global selected_expense_id
     title = entry_title.get().strip()
     amount = entry_amount.get().strip()
     category = cat_var.get()
     exp_date = entry_date.get().strip()
+    
     if not title or not amount: return
-    save_expense(title, float(amount), category, exp_date)
+    
+    if selected_expense_id is None:
+        save_expense(title, float(amount), category, exp_date)
+    else:
+        update_expense_db(selected_expense_id, title, float(amount), category, exp_date)
+        selected_expense_id = None
+        btn_save.config(text="💾 Save Expense", bg="#27ae60")
+        
     entry_title.delete(0, tk.END)
     entry_amount.delete(0, tk.END)
     load_table()
@@ -97,18 +112,33 @@ tree.pack(fill="both", expand=True)
 
 def handle_delete():
     selected = tree.selection()
-    if not selected:
-        messagebox.showwarning("Warning", "Please select a row first!")
-        return
+    if not selected: return
     eid = tree.item(selected[0])["values"][0]
-    if messagebox.askyesno("Confirm", "Are you sure you want to delete?"):
-        delete_expense(eid)
-        load_table()
+    delete_expense(eid)
+    load_table()
+
+def handle_edit_select(event):
+    global selected_expense_id
+    selected = tree.selection()
+    if not selected: return
+    values = tree.item(selected[0])["values"]
+    
+    selected_expense_id = values[0]
+    entry_title.delete(0, tk.END)
+    entry_title.insert(0, values[1])
+    entry_amount.delete(0, tk.END)
+    entry_amount.insert(0, values[2])
+    cat_var.set(values[3])
+    entry_date.delete(0, tk.END)
+    entry_date.insert(0, values[4])
+    btn_save.config(text="🔄 Update Expense", bg="#2980b9")
+
+# Bind Double Click
+tree.bind("<Double-1>", handle_edit_select)
 
 # Action Buttons
 btn_frame = tk.Frame(root, bg="#f5f6fa")
 btn_frame.pack(pady=10)
-
 tk.Button(btn_frame, text="🗑️ Delete Selected", font=("Arial", 10, "bold"), bg="#e74c3c", fg="white", padx=18, pady=6, command=handle_delete).pack(side="left", padx=10)
 
 def load_table():
